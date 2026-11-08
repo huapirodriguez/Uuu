@@ -1,0 +1,67 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUnlockAttempt(data) {
+      return data.keys().hasAll(['userId', 'success', 'length', 'deviceInfo', 'timestamp'])
+        && data.keys().hasOnly(['userId', 'success', 'length', 'patternMasked', 'deviceInfo', 'timestamp'])
+        && data.userId is string && data.userId == request.auth.uid
+        && data.success is bool
+        && data.length is number && data.length >= 0 && data.length <= 64
+        && (!('patternMasked' in data) || (data.patternMasked is string && data.patternMasked.size() <= 64))
+        && data.deviceInfo is string && data.deviceInfo.size() <= 128
+        && data.timestamp is number;
+    }
+
+    function isValidUserProfile(data, expectedUserId) {
+      return data.keys().hasAll(['userId', 'email'])
+        && data.keys().hasOnly(['userId', 'email', 'displayName', 'photoUrl', 'updatedAt'])
+        && data.userId is string && data.userId == expectedUserId
+        && data.email is string && data.email.size() <= 128
+        && (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128))
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 512))
+        && (!('updatedAt' in data) || (data.updatedAt is number));
+    }
+
+    // Unlock Attempts Collection
+    match /unlock_attempts/{attemptId} {
+      allow read: if isSignedIn() && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(attemptId) && isValidUnlockAttempt(incoming());
+      allow update, delete: if false; // Immutable audit log
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming(), userId);
+      allow update: if isOwner(userId) && isValidUserProfile(incoming(), userId) && incoming().userId == existing().userId;
+      allow delete: if isOwner(userId);
+    }
+  }
+}

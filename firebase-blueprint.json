@@ -1,0 +1,81 @@
+{
+  "entities": {
+    "UnlockAttempt": {
+      "title": "UnlockAttempt",
+      "description": "Log of pattern unlock attempts for security auditing and analytics",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who made the attempt",
+          "maxLength": 128
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the unlock pattern matched"
+        },
+        "length": {
+          "type": "number",
+          "description": "Number of points in the pattern"
+        },
+        "patternMasked": {
+          "type": "string",
+          "description": "Masked pattern dots for privacy",
+          "maxLength": 64
+        },
+        "deviceInfo": {
+          "type": "string",
+          "description": "Device name or USB connection type",
+          "maxLength": 128
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Epoch timestamp in milliseconds"
+        }
+      },
+      "required": ["userId", "success", "length", "deviceInfo", "timestamp"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and visual theme preferences",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the user",
+          "maxLength": 128
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 128
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 128
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "User avatar photo URL",
+          "maxLength": 512
+        },
+        "updatedAt": {
+          "type": "number",
+          "description": "Last updated epoch timestamp"
+        }
+      },
+      "required": ["userId", "email"]
+    }
+  },
+  "firestore": {
+    "/unlock_attempts/{attemptId}": {
+      "schema": "UnlockAttempt",
+      "description": "Collection of unlock attempts recorded for the user"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document indexed by UID"
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Remix PatternLock - Desbloqueo de Patrón",
+  "description": "Aplicación interactiva y segura de desbloqueo por patrón con simulador de pantalla de bloqueo, auditoría de seguridad criptográfica, bóveda secreta y juego de memoria.",
+  "requestFramePermissions": [
+    "usb",
+    "bluetooth"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
