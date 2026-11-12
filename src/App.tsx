@@ -11,6 +11,10 @@ import { RemoteTouchController } from './components/RemoteTouchController.tsx';
 import { UnlockAgentModal } from './components/UnlockAgentModal.tsx';
 import { PhoneScreenMirror } from './components/PhoneScreenMirror.tsx';
 import { DeviceDataViewer } from './components/DeviceDataViewer.tsx';
+import { SecurityApiModal } from './components/SecurityApiModal.tsx';
+import { GoogleAccountModal } from './components/GoogleAccountModal.tsx';
+import { AdbConsole } from './components/AdbConsole.tsx';
+import { BiometricAuthModal } from './components/BiometricAuthModal.tsx';
 import {
   initAuth,
   signInWithGoogle,
@@ -41,6 +45,8 @@ import {
   QrCode,
   Bot,
   Database,
+  Terminal,
+  Zap,
 } from 'lucide-react';
 
 const DEFAULT_MASTER_PATTERN = [0, 1, 2, 4, 6, 7, 8]; // Classic Z pattern for initial demo
@@ -115,8 +121,42 @@ export default function App() {
   const [hideTrail, setHideTrail] = useState(false);
   const [showNumbers, setShowNumbers] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isBiometricModalOpen, setIsBiometricModalOpen] = useState(false);
+  const [isBiometricRequired, setIsBiometricRequired] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('patternlock_biometric_required') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleRequestOpenSettings = () => {
+    playClickSound(soundEnabled);
+    const verifiedRecently = (() => {
+      try {
+        const ts = sessionStorage.getItem('patternlock_biometric_verified');
+        if (ts && Date.now() - Number(ts) < 5 * 60 * 1000) return true;
+      } catch {}
+      return false;
+    })();
+
+    if (isBiometricRequired && !verifiedRecently) {
+      setIsBiometricModalOpen(true);
+    } else {
+      setIsSettingsOpen(true);
+    }
+  };
   const [isPhoneConnectOpen, setIsPhoneConnectOpen] = useState(false);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
+  const [isSecurityApiOpen, setIsSecurityApiOpen] = useState(false);
+  const [isGoogleAccountModalOpen, setIsGoogleAccountModalOpen] = useState(false);
+  const [isBootableUsbDebugActive, setIsBootableUsbDebugActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('patternlock_bootable_debug') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [pairedDevice, setPairedDevice] = useState<string | null>(() => {
     try {
       return localStorage.getItem('patternlock_paired_device');
@@ -448,6 +488,24 @@ export default function App() {
           <button
             onClick={() => {
               playClickSound(soundEnabled);
+              setAppMode('adb-console');
+            }}
+            className={`transition-colors whitespace-nowrap shrink-0 py-1 flex items-center gap-1.5 ${
+              appMode === 'adb-console' ? 'text-white border-b-2 font-bold' : 'hover:text-white'
+            }`}
+            style={{
+              borderColor: appMode === 'adb-console' ? '#06b6d4' : 'transparent',
+            }}
+          >
+            <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Consola ADB</span>
+            {isBootableUsbDebugActive && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Depuración USB Booteable Activa" />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              playClickSound(soundEnabled);
               setAppMode('game');
             }}
             className={`transition-colors whitespace-nowrap shrink-0 py-1 flex items-center gap-1.5 ${
@@ -464,9 +522,16 @@ export default function App() {
 
         {/* Zone 3: Actions + Google OAuth + Phone Connect & Agent Buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Google OAuth Login / User Profile */}
+          {/* Google OAuth Login / User Profile Editor */}
           {currentUser ? (
-            <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1 text-xs shadow-sm">
+            <button
+              onClick={() => {
+                playClickSound(soundEnabled);
+                setIsGoogleAccountModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl px-2.5 py-1 text-xs shadow-sm transition-all active:scale-95 group"
+              title="Haz clic para editar y modificar tu cuenta Google integrada"
+            >
               {currentUser.photoURL ? (
                 <img
                   src={currentUser.photoURL}
@@ -478,23 +543,21 @@ export default function App() {
                   {(currentUser.displayName || currentUser.email || 'U')[0].toUpperCase()}
                 </div>
               )}
-              <span className="text-[11px] font-semibold text-slate-200 hidden lg:inline max-w-[110px] truncate">
+              <span className="text-[11px] font-semibold text-slate-200 hidden lg:inline max-w-[110px] truncate group-hover:text-cyan-300">
                 {currentUser.displayName || currentUser.email}
               </span>
-              <button
-                onClick={handleGoogleSignOut}
-                className="text-[10px] text-slate-400 hover:text-rose-400 ml-1 font-semibold transition-colors"
-                title="Cerrar sesión"
-              >
-                Salir
-              </button>
-            </div>
+              <span className="text-[10px] text-cyan-400 ml-1 font-semibold group-hover:underline">
+                Editar
+              </span>
+            </button>
           ) : (
             <button
-              onClick={handleGoogleSignIn}
-              disabled={isSigningInGoogle}
+              onClick={() => {
+                playClickSound(soundEnabled);
+                setIsGoogleAccountModalOpen(true);
+              }}
               className="px-2.5 py-1.5 text-xs font-semibold rounded-xl bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 flex items-center gap-1.5 transition-all shadow-sm active:scale-95 whitespace-nowrap shrink-0"
-              title="Acceder con Google OAuth"
+              title="Vincular o modificar cuenta Google OAuth"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 48 48">
                 <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
@@ -506,6 +569,27 @@ export default function App() {
               <span className="sm:hidden">OAuth</span>
             </button>
           )}
+
+          {/* Consola ADB Direct Button */}
+          <button
+            onClick={() => {
+              playClickSound(soundEnabled);
+              setAppMode('adb-console');
+            }}
+            className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all shadow-sm active:scale-95 whitespace-nowrap shrink-0 ${
+              appMode === 'adb-console'
+                ? 'bg-cyan-500 text-slate-950 border-cyan-400'
+                : 'bg-slate-900 hover:bg-slate-800 border-slate-700/80 text-cyan-300'
+            }`}
+            title="Abrir la consola interactiva ADB & Fastboot"
+          >
+            <Terminal className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Consola ADB</span>
+            <span className="sm:hidden">ADB</span>
+            {isBootableUsbDebugActive && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            )}
+          </button>
 
           {/* Conectar y Leer Todos los Datos Button */}
           <button
@@ -532,6 +616,20 @@ export default function App() {
             <Bot className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span className="hidden sm:inline">Agente IA</span>
             <span className="sm:hidden">Agente</span>
+          </button>
+
+          {/* API de Seguridad Button */}
+          <button
+            onClick={() => {
+              playClickSound(soundEnabled);
+              setIsSecurityApiOpen(true);
+            }}
+            className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 text-cyan-300 flex items-center gap-1.5 transition-all shadow-sm active:scale-95 whitespace-nowrap shrink-0"
+            title="Modificar políticas y parámetros de la API de seguridad"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">API de Seguridad</span>
+            <span className="sm:hidden">API</span>
           </button>
 
           {/* Conectar con Teléfono Button (USB / QR) */}
@@ -566,10 +664,7 @@ export default function App() {
 
           {/* Settings Customizer */}
           <button
-            onClick={() => {
-              playClickSound(soundEnabled);
-              setIsSettingsOpen(true);
-            }}
+            onClick={handleRequestOpenSettings}
             className="px-3.5 py-1.5 text-xs font-bold text-slate-950 rounded-xl transition-all shadow-md active:scale-95 flex items-center gap-1.5 whitespace-nowrap shrink-0"
             style={{ backgroundColor: customStyle.connectionColor }}
           >
@@ -699,7 +794,7 @@ export default function App() {
                 showNumbers={showNumbers}
                 onUnlockSuccess={handleUnlockSuccess}
                 onRecordAttempt={handleRecordAttempt}
-                onOpenSettings={() => setIsSettingsOpen(true)}
+                onOpenSettings={handleRequestOpenSettings}
                 pairedDevice={pairedDevice}
                 onOpenPhoneConnect={() => setIsPhoneConnectOpen(true)}
                 onOpenAgent={() => setIsAgentOpen(true)}
@@ -829,6 +924,7 @@ export default function App() {
             unlockAttempts={unlockAttempts}
             onRecordAttempt={handleRecordAttempt}
             onClearAttempts={handleClearAttempts}
+            onOpenSecurityApi={() => setIsSecurityApiOpen(true)}
           />
         )}
 
@@ -843,10 +939,33 @@ export default function App() {
             customStyle={customStyle}
           />
         )}
+
+        {/* MODE 6: ADB & Fastboot Interactive Console */}
+        {appMode === 'adb-console' && (
+          <div className="w-full py-2">
+            <AdbConsole
+              soundEnabled={soundEnabled}
+              pairedDevice={pairedDevice}
+              masterPattern={masterPattern}
+              isBootableUsbDebugActive={isBootableUsbDebugActive}
+              onToggleBootableUsbDebug={(active) => {
+                setIsBootableUsbDebugActive(active);
+                try {
+                  localStorage.setItem('patternlock_bootable_debug', String(active));
+                } catch {}
+                showToast(active ? '⚡ Depuración USB booteable ACTIVADA' : 'Depuración USB booteable desactivada');
+              }}
+              onUnlockSuccess={handleUnlockSuccess}
+              onLockDevice={handleLockDevice}
+              onOpenMirror={() => setAppMode('mirror')}
+              onOpenDeviceData={() => setAppMode('device-data')}
+            />
+          </div>
+        )}
       </main>
 
       {/* Mobile Bottom Navigation Bar (§3 Pattern 1) */}
-      <div className="md:hidden sticky bottom-0 z-40 bg-slate-950/90 backdrop-blur-md border-t border-slate-800 grid grid-cols-6 items-center h-16 px-1">
+      <div className="md:hidden sticky bottom-0 z-40 bg-slate-950/90 backdrop-blur-md border-t border-slate-800 grid grid-cols-7 items-center h-16 px-0.5">
         <button
           onClick={() => {
             playClickSound(soundEnabled);
@@ -856,8 +975,8 @@ export default function App() {
             appMode === 'lockscreen' ? 'text-cyan-400' : 'text-slate-400'
           }`}
         >
-          <Lock className="w-5 h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Bloqueo</span>
+          <Lock className="w-4 h-4" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">Bloqueo</span>
         </button>
 
         <button
@@ -869,8 +988,8 @@ export default function App() {
             appMode === 'mirror' ? 'text-emerald-400' : 'text-slate-400'
           }`}
         >
-          <Smartphone className="w-5 h-5 text-emerald-400" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Espejo</span>
+          <Smartphone className="w-4 h-4 text-emerald-400" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">Espejo</span>
         </button>
 
         <button
@@ -882,8 +1001,21 @@ export default function App() {
             appMode === 'device-data' ? 'text-cyan-400 font-bold' : 'text-slate-400'
           }`}
         >
-          <Database className="w-5 h-5 text-cyan-400" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Datos</span>
+          <Database className="w-4 h-4 text-cyan-400" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">Datos</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playClickSound(soundEnabled);
+            setAppMode('adb-console');
+          }}
+          className={`flex flex-col items-center justify-center py-1 transition-colors ${
+            appMode === 'adb-console' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+          }`}
+        >
+          <Terminal className="w-4 h-4 text-cyan-400" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">ADB</span>
         </button>
 
         <button
@@ -895,8 +1027,8 @@ export default function App() {
             appMode === 'vault' ? 'text-cyan-400' : 'text-slate-400'
           }`}
         >
-          <ShieldCheck className="w-5 h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Bóveda</span>
+          <ShieldCheck className="w-4 h-4" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">Bóveda</span>
         </button>
 
         <button
@@ -908,8 +1040,8 @@ export default function App() {
             appMode === 'analyzer' ? 'text-cyan-400' : 'text-slate-400'
           }`}
         >
-          <Sparkles className="w-5 h-5" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Claves</span>
+          <Sparkles className="w-4 h-4" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">Claves</span>
         </button>
 
         <button
@@ -919,8 +1051,8 @@ export default function App() {
           }}
           className="flex flex-col items-center justify-center py-1 transition-colors text-slate-400 hover:text-cyan-400"
         >
-          <Usb className="w-5 h-5 text-cyan-400" />
-          <span className="text-[10px] font-medium tracking-tight mt-1">Conectar</span>
+          <Usb className="w-4 h-4 text-cyan-400" />
+          <span className="text-[9px] font-medium tracking-tight mt-0.5">USB</span>
         </button>
       </div>
 
@@ -944,6 +1076,26 @@ export default function App() {
         onChangeCustomStyle={(st) => setCustomStyle(st)}
         onResetToDefaultPattern={handleResetToDefaultPattern}
         theme={activeTheme}
+        isBiometricRequired={isBiometricRequired}
+        onToggleBiometricRequired={(req) => {
+          setIsBiometricRequired(req);
+          try {
+            localStorage.setItem('patternlock_biometric_required', String(req));
+          } catch {}
+          showToast(req ? 'Protección biométrica para ajustes activada' : 'Protección biométrica desactivada');
+        }}
+        onTestBiometricChallenge={() => setIsBiometricModalOpen(true)}
+      />
+
+      {/* Mock Biometric Authentication Challenge Modal */}
+      <BiometricAuthModal
+        isOpen={isBiometricModalOpen}
+        onClose={() => setIsBiometricModalOpen(false)}
+        onSuccess={() => {
+          setIsBiometricModalOpen(false);
+          setIsSettingsOpen(true);
+        }}
+        soundEnabled={soundEnabled}
       />
 
       {/* Phone Connection Modal */}
@@ -959,6 +1111,15 @@ export default function App() {
         onLockByRemote={handleLockDevice}
         onOpenMirror={() => setAppMode('mirror')}
         onOpenDeviceData={() => setAppMode('device-data')}
+        onOpenAdbConsole={() => setAppMode('adb-console')}
+        isBootableUsbDebugActive={isBootableUsbDebugActive}
+        onToggleBootableUsbDebug={(active) => {
+          setIsBootableUsbDebugActive(active);
+          try {
+            localStorage.setItem('patternlock_bootable_debug', String(active));
+          } catch {}
+          showToast(active ? '⚡ Depuración USB booteable ACTIVADA' : 'Depuración USB booteable desactivada');
+        }}
       />
 
       {/* Unlock Agent AI Assistant Modal */}
@@ -971,6 +1132,26 @@ export default function App() {
         pairedDevice={pairedDevice}
         onExecuteUnlock={handleAgentUnlock}
         soundEnabled={soundEnabled}
+      />
+
+      {/* Security API Modification & Policy Modal */}
+      <SecurityApiModal
+        isOpen={isSecurityApiOpen}
+        onClose={() => setIsSecurityApiOpen(false)}
+        soundEnabled={soundEnabled}
+        currentMasterPattern={masterPattern}
+      />
+
+      {/* Google Account Profile & Modification Modal */}
+      <GoogleAccountModal
+        isOpen={isGoogleAccountModalOpen}
+        onClose={() => setIsGoogleAccountModalOpen(false)}
+        currentUser={currentUser}
+        onUserUpdated={(u) => {
+          setCurrentUser(u);
+        }}
+        soundEnabled={soundEnabled}
+        onToast={(msg) => showToast(msg)}
       />
     </div>
   );

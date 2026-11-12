@@ -58,6 +58,9 @@ interface PhoneConnectModalProps {
   onLockByRemote?: () => void;
   onOpenMirror?: () => void;
   onOpenDeviceData?: () => void;
+  onOpenAdbConsole?: () => void;
+  isBootableUsbDebugActive?: boolean;
+  onToggleBootableUsbDebug?: (active: boolean) => void;
 }
 
 export const PhoneConnectModal: React.FC<PhoneConnectModalProps> = ({
@@ -72,6 +75,9 @@ export const PhoneConnectModal: React.FC<PhoneConnectModalProps> = ({
   onLockByRemote,
   onOpenMirror,
   onOpenDeviceData,
+  onOpenAdbConsole,
+  isBootableUsbDebugActive = false,
+  onToggleBootableUsbDebug,
 }) => {
   const [tab, setTab] = useState<'usb' | 'read_data' | 'wireless' | 'fastboot_adb' | 'qr' | 'remote' | 'pwa' | 'bluetooth'>('usb');
   const [copiedLink, setCopiedLink] = useState(false);
@@ -1177,14 +1183,65 @@ export const PhoneConnectModal: React.FC<PhoneConnectModalProps> = ({
             </div>
 
             {/* Quick Actions Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  playSuccessSound(soundEnabled);
+                  if (onToggleBootableUsbDebug) {
+                    onToggleBootableUsbDebug(true);
+                  }
+                  setFastbootTerminalOutput(
+                    `$ fastboot oem config boot_debug 1\n$ fastboot oem enable-boot-debug\n$ adb shell setprop persist.service.adb.enable 1\n$ adb shell setprop ro.boot.usbconfig adb,fastboot\n[ÉXITO] Depuración USB booteable ACTIVADA.\nDaemon ADB y descriptor USB enlazados para arranque en stage 1 de kernel.`
+                  );
+                }}
+                className={`p-3 rounded-2xl border text-left transition-all ${
+                  isBootableUsbDebugActive
+                    ? 'bg-emerald-950/70 border-emerald-500/60 shadow-md shadow-emerald-950/30'
+                    : 'bg-amber-950/70 border-amber-500/50 hover:bg-amber-900/80'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-1 mb-1">
+                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
+                    <Zap className="w-4 h-4 text-amber-400" />
+                    <span>Activar Depuración USB Booteable</span>
+                  </div>
+                  {isBootableUsbDebugActive && (
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900 text-emerald-300 font-mono font-bold">
+                      ACTIVA
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-300">
+                  Habilita arranque con ADB temprano y diagnóstico de hardware por cable USB.
+                </p>
+              </button>
+
+              {onOpenAdbConsole && (
+                <button
+                  onClick={() => {
+                    playClickSound(soundEnabled);
+                    onClose();
+                    onOpenAdbConsole();
+                  }}
+                  className="p-3 rounded-2xl bg-cyan-950/70 border border-cyan-500/50 hover:bg-cyan-900/80 text-left transition-colors"
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-cyan-300 mb-1">
+                    <Terminal className="w-4 h-4 text-cyan-400" />
+                    <span>Consola ADB Completa</span>
+                  </div>
+                  <p className="text-[10px] text-slate-300">
+                    Abre la terminal de comandos interactiva de ADB y shell del sistema.
+                  </p>
+                </button>
+              )}
+
               <button
                 onClick={handleEnterSystemAdb}
                 className="p-3 rounded-2xl bg-emerald-950/70 border border-emerald-500/40 hover:bg-emerald-900 text-left transition-colors"
               >
                 <div className="flex items-center gap-2 text-emerald-400 font-bold mb-1">
                   <Unlock className="w-4 h-4" />
-                  <span>Ingresar al Sistema</span>
+                  <span>Ingresar al Sistema (Keyguard 82)</span>
                 </div>
                 <p className="text-[10px] text-slate-400">
                   Supera la pantalla de bloqueo e ingresa a la interfaz de aplicaciones.
@@ -1192,29 +1249,15 @@ export const PhoneConnectModal: React.FC<PhoneConnectModalProps> = ({
               </button>
 
               <button
-                onClick={handleModalResetOAuthAction}
-                disabled={isResettingOAuth}
-                className="p-3 rounded-2xl bg-rose-950/70 border border-rose-500/40 hover:bg-rose-900 text-left transition-colors"
-              >
-                <div className="flex items-center gap-2 text-rose-400 font-bold mb-1">
-                  <RotateCcw className="w-4 h-4" />
-                  <span>Reset OAuth</span>
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  Restablece tokens y credenciales de autenticación del dispositivo.
-                </p>
-              </button>
-
-              <button
                 onClick={handleSwitchToFastbootInModal}
-                className="p-3 rounded-2xl bg-amber-950/70 border border-amber-500/40 hover:bg-amber-900 text-left transition-colors"
+                className="p-3 rounded-2xl bg-slate-900 border border-slate-700 hover:border-amber-500/50 text-left transition-colors"
               >
                 <div className="flex items-center gap-2 text-amber-400 font-bold mb-1">
                   <Zap className="w-4 h-4" />
-                  <span>Modo Fastboot</span>
+                  <span>Modo Fastboot OEM</span>
                 </div>
                 <p className="text-[10px] text-slate-400">
-                  Reinicia en Motorola AP Fastboot Flash Mode para comandos OEM.
+                  Reinicia en Motorola AP Fastboot Flash Mode para comandos de flasheo.
                 </p>
               </button>
             </div>
@@ -1226,19 +1269,35 @@ export const PhoneConnectModal: React.FC<PhoneConnectModalProps> = ({
               </div>
             )}
 
-            {onOpenMirror && (
-              <button
-                onClick={() => {
-                  playClickSound(soundEnabled);
-                  onClose();
-                  onOpenMirror();
-                }}
-                className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
-              >
-                <Smartphone className="w-4 h-4" />
-                <span>Abrir Consola y Pantalla en Vivo (Scrcpy / Mirror)</span>
-              </button>
-            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {onOpenAdbConsole && (
+                <button
+                  onClick={() => {
+                    playClickSound(soundEnabled);
+                    onClose();
+                    onOpenAdbConsole();
+                  }}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                >
+                  <Terminal className="w-4 h-4" />
+                  <span>Abrir Consola ADB</span>
+                </button>
+              )}
+
+              {onOpenMirror && (
+                <button
+                  onClick={() => {
+                    playClickSound(soundEnabled);
+                    onClose();
+                    onOpenMirror();
+                  }}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Abrir Pantalla en Vivo (Scrcpy)</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 

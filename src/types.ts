@@ -36,7 +36,7 @@ export interface ThemeConfig {
   nodeShape?: NodeShape;
 }
 
-export type AppMode = 'lockscreen' | 'settings' | 'vault' | 'game' | 'analyzer' | 'mirror' | 'device-data';
+export type AppMode = 'lockscreen' | 'settings' | 'vault' | 'game' | 'analyzer' | 'mirror' | 'device-data' | 'adb-console';
 
 export interface PatternSecurityReport {
   score: number; // 0 - 100
@@ -89,4 +89,18 @@ export interface PatternPreset {
   pattern: number[];
   difficulty: 'Fácil' | 'Medio' | 'Difícil' | 'Extremo';
   shape: string;
+}
+
+export interface SecurityApiPolicy {
+  minPatternLength: number;
+  minEntropyBits: number;
+  maxAttemptsBeforeLockout: number;
+  lockoutDurationSeconds: number;
+  hashAlgorithm: 'HMAC-SHA-512' | 'PBKDF2-SHA-256' | 'SHA-256';
+  saltRounds: number;
+  enforceNonAdjacentNodes: boolean;
+  blockCommonShapes: boolean;
+  smudgeAttackDefense: boolean;
+  requireBiometricFallback: boolean;
+  updatedAt?: number;
 }

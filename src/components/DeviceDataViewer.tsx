@@ -28,6 +28,13 @@ import {
   Activity,
   Boxes,
   Sparkles,
+  Edit3,
+  Plus,
+  RotateCcw,
+  Save,
+  Trash2,
+  FileCode,
+  X,
 } from 'lucide-react';
 import { CustomGridStyle, ThemeConfig } from '../types.ts';
 import {
@@ -108,11 +115,178 @@ export const DeviceDataViewer: React.FC<DeviceDataViewerProps> = ({
   const [hasCopied, setHasCopied] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Property Editing States (getprop / setprop)
+  const [editingProp, setEditingProp] = useState<{
+    originalKey: string;
+    key: string;
+    value: string;
+    category: 'build' | 'hardware' | 'security' | 'network' | 'display';
+    description: string;
+  } | null>(null);
+  const [isAddPropModalOpen, setIsAddPropModalOpen] = useState(false);
+  const [newPropKey, setNewPropKey] = useState('');
+  const [newPropValue, setNewPropValue] = useState('');
+  const [newPropCategory, setNewPropCategory] = useState<'build' | 'hardware' | 'security' | 'network' | 'display'>('build');
+  const [newPropDescription, setNewPropDescription] = useState('');
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((curr) => (curr === msg ? null : curr));
     }, 3500);
+  };
+
+  // Save modified property (setprop)
+  const handleSaveEditedProperty = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingProp) return;
+    if (!editingProp.value.trim()) {
+      showToast('El valor de la propiedad no puede estar vacío');
+      return;
+    }
+
+    playSuccessSound(soundEnabled);
+    setDeviceData((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => {
+        if (p.key === editingProp.originalKey) {
+          return {
+            ...p,
+            key: editingProp.key.trim(),
+            value: editingProp.value.trim(),
+            category: editingProp.category,
+            description: editingProp.description.trim(),
+            isModified: true,
+          };
+        }
+        return p;
+      }),
+    }));
+
+    showToast(`[setprop] Propiedad ${editingProp.key} modificada a "${editingProp.value}"`);
+    setEditingProp(null);
+  };
+
+  // Add new custom property (setprop)
+  const handleAddCustomProperty = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!newPropKey.trim() || !newPropValue.trim()) {
+      showToast('Clave y valor son requeridos para setprop');
+      return;
+    }
+
+    playSuccessSound(soundEnabled);
+    const key = newPropKey.trim();
+    const value = newPropValue.trim();
+
+    setDeviceData((prev) => {
+      const existing = prev.properties.find((p) => p.key === key);
+      if (existing) {
+        return {
+          ...prev,
+          properties: prev.properties.map((p) =>
+            p.key === key
+              ? {
+                  ...p,
+                  value,
+                  category: newPropCategory,
+                  description: newPropDescription.trim() || 'Propiedad modificada por el usuario',
+                  isModified: true,
+                }
+              : p
+          ),
+        };
+      }
+      return {
+        ...prev,
+        properties: [
+          {
+            key,
+            value,
+            category: newPropCategory,
+            description: newPropDescription.trim() || 'Propiedad personalizada añadida mediante setprop',
+            isModified: true,
+          },
+          ...prev.properties,
+        ],
+      };
+    });
+
+    showToast(`[setprop] Propiedad ${key} registrada con éxito`);
+    setNewPropKey('');
+    setNewPropValue('');
+    setNewPropDescription('');
+    setIsAddPropModalOpen(false);
+  };
+
+  // Quick preset: Activar Depuración USB Booteable
+  const handleApplyBootableDebugPreset = () => {
+    playSuccessSound(soundEnabled);
+    const updates: Record<string, string> = {
+      'ro.boot.usbconfig': 'adb,fastboot',
+      'persist.service.adb.enable': '1',
+      'persist.sys.usb.config': 'adb',
+      'ro.debuggable': '1',
+      'sys.usb.state': 'adb',
+      'ro.boot.flash.locked': '0',
+    };
+
+    setDeviceData((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => {
+        if (updates[p.key] !== undefined) {
+          return {
+            ...p,
+            value: updates[p.key],
+            isModified: true,
+          };
+        }
+        return p;
+      }),
+    }));
+
+    showToast('⚡ Depuración USB Booteable activada en todas las propiedades del sistema (getprop/setprop)');
+  };
+
+  // Quick preset: Device Spoofing
+  const handleApplyDeviceSpoof = (newModel: string, newBrand: string) => {
+    playSuccessSound(soundEnabled);
+    setDeviceData((prev) => ({
+      ...prev,
+      properties: prev.properties.map((p) => {
+        if (p.key === 'ro.product.model') return { ...p, value: newModel, isModified: true };
+        if (p.key === 'ro.product.manufacturer') return { ...p, value: newBrand, isModified: true };
+        if (p.key === 'ro.product.brand') return { ...p, value: newBrand.toLowerCase(), isModified: true };
+        return p;
+      }),
+    }));
+    showToast(`Identidad de hardware modificada a: ${newModel}`);
+  };
+
+  // Reset properties to factory defaults
+  const handleResetPropertiesToDefault = () => {
+    playClickSound(soundEnabled);
+    const fresh = generateDeviceDataset(selectedDeviceName, masterPattern);
+    setDeviceData((prev) => ({
+      ...prev,
+      properties: fresh.properties,
+    }));
+    showToast('Propiedades restauradas a los valores originales de fábrica (getprop)');
+  };
+
+  // Export build.prop
+  const handleDownloadBuildProp = () => {
+    playClickSound(soundEnabled);
+    const lines = [
+      '# Android System Properties Registry (getprop dump)',
+      `# Device: ${deviceData.brand} ${deviceData.model} (${deviceData.deviceName})`,
+      `# Generated: ${new Date().toISOString()}`,
+      '# -------------------------------------------------------------',
+      '',
+      ...deviceData.properties.map((p) => `${p.key}=${p.value}`),
+    ];
+    downloadFile(lines.join('\n'), 'build.prop', 'text/plain');
+    showToast('Archivo build.prop descargado con éxito.');
   };
 
   // Perform full data extraction on demand
@@ -585,80 +759,392 @@ export const DeviceDataViewer: React.FC<DeviceDataViewerProps> = ({
         </div>
       )}
 
-      {/* TAB CONTENT 2: SYSTEM PROPERTIES GETPROP */}
+      {/* TAB CONTENT 2: SYSTEM PROPERTIES GETPROP & SETPROP EDITOR */}
       {activeTab === 'getprop' && (
         <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-4">
-          {/* Header & Filter Controls */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          {/* Header & Main Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-cyan-400" />
-                <span>Registro de Propiedades del Sistema (getprop)</span>
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-cyan-400" />
+                  <span>Registro de Propiedades del Sistema (getprop / setprop)</span>
+                </h3>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold">
+                  EDICIÓN HABILITADA
+                </span>
+              </div>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {filteredProps.length} de {deviceData.properties.length} propiedades leídas a través del daemon ADB / WebUSB
+                {filteredProps.length} de {deviceData.properties.length} propiedades leídas. Haz clic en "Editar" en cualquier propiedad o añade nuevas directivas mediante setprop.
               </p>
             </div>
 
+            {/* Top Action Presets Bar */}
             <div className="flex flex-wrap items-center gap-2">
-              {/* Category selector */}
-              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
-                {['all', 'build', 'hardware', 'security', 'network', 'display'].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setPropCategory(cat)}
-                    className={`px-2.5 py-1 rounded-lg font-medium capitalize transition-colors ${
-                      propCategory === cat
-                        ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {cat === 'all' ? 'Todas' : cat}
-                  </button>
-                ))}
-              </div>
+              <button
+                type="button"
+                onClick={handleApplyBootableDebugPreset}
+                className="py-1.5 px-3 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                title="Configura ro.boot.usbconfig=adb,fastboot y persist.service.adb.enable=1"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Activar USB Booteable</span>
+              </button>
 
-              {/* Search box */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={propSearch}
-                  onChange={(e) => setPropSearch(e.target.value)}
-                  placeholder="Filtrar por clave o valor (ej: brand, security, usb)..."
-                  className="bg-slate-950 border border-slate-800 focus:border-cyan-500 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none w-56 transition-colors font-mono"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  playClickSound(soundEnabled);
+                  setIsAddPropModalOpen(true);
+                }}
+                className="py-1.5 px-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+              >
+                <Plus className="w-3.5 h-3.5 stroke-[3]" />
+                <span>Añadir Propiedad (setprop)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadBuildProp}
+                className="py-1.5 px-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                title="Descargar archivo build.prop con todas las modificaciones"
+              >
+                <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Descargar build.prop</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleResetPropertiesToDefault}
+                className="py-1.5 px-3 bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition-colors"
+                title="Restaurar a los valores originales de fábrica"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restaurar Fábrica</span>
+              </button>
             </div>
           </div>
 
-          {/* Properties Table */}
-          <div className="overflow-x-auto max-h-[500px] overflow-y-auto pr-1">
+          {/* Filter Bar: Category & Search */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80">
+            <div className="flex items-center gap-1.5 flex-wrap text-xs">
+              <span className="text-[11px] font-semibold text-slate-400 mr-1">Categoría:</span>
+              {['all', 'build', 'hardware', 'security', 'network', 'display'].map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    playClickSound(soundEnabled);
+                    setPropCategory(cat);
+                  }}
+                  className={`px-2.5 py-1 rounded-xl font-medium capitalize transition-all ${
+                    propCategory === cat
+                      ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                      : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  {cat === 'all' ? 'Todas' : cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Search box */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={propSearch}
+                onChange={(e) => setPropSearch(e.target.value)}
+                placeholder="Filtrar por clave o valor (ej: debug, usbconfig, model)..."
+                className="bg-slate-900 border border-slate-800 focus:border-cyan-500 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none w-full sm:w-64 transition-colors font-mono"
+              />
+            </div>
+          </div>
+
+          {/* Properties Table with Edit Action */}
+          <div className="overflow-x-auto max-h-[520px] overflow-y-auto pr-1 border border-slate-800 rounded-2xl">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950/80 sticky top-0 z-10">
+                <tr className="border-b border-slate-800 text-[11px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950/90 sticky top-0 z-10 backdrop-blur-sm">
                   <th className="py-2.5 px-3">Clave de Propiedad</th>
                   <th className="py-2.5 px-3">Valor de Sistema</th>
                   <th className="py-2.5 px-3">Categoría</th>
                   <th className="py-2.5 px-3">Descripción Técnica</th>
+                  <th className="py-2.5 px-3 text-right">Modificar</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
                 {filteredProps.map((p, idx) => (
-                  <tr key={idx} className="hover:bg-slate-850/50 transition-colors">
-                    <td className="py-2 px-3 text-cyan-300 font-semibold">{p.key}</td>
-                    <td className="py-2 px-3 text-white select-all">{p.value}</td>
-                    <td className="py-2 px-3 font-sans">
+                  <tr
+                    key={idx}
+                    className={`transition-colors group ${
+                      p.isModified ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <td className="py-2.5 px-3 text-cyan-300 font-semibold select-all">
+                      <div className="flex items-center gap-1.5">
+                        <span>{p.key}</span>
+                        {p.isModified && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/50 font-sans font-bold">
+                            MODIFICADO
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 select-all">
+                      <span className={`font-bold ${p.isModified ? 'text-emerald-300' : 'text-white'}`}>
+                        {p.value}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 font-sans">
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-950 text-slate-400 border border-slate-800 capitalize font-medium">
                         {p.category}
                       </span>
                     </td>
-                    <td className="py-2 px-3 text-slate-400 font-sans text-[11px]">{p.description || '-'}</td>
+                    <td className="py-2.5 px-3 text-slate-400 font-sans text-[11px] max-w-xs truncate">
+                      {p.description || 'Propiedad de configuración del entorno'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-sans">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playClickSound(soundEnabled);
+                          setEditingProp({
+                            originalKey: p.key,
+                            key: p.key,
+                            value: p.value,
+                            category: p.category,
+                            description: p.description || '',
+                          });
+                        }}
+                        className="py-1 px-2.5 rounded-lg bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-slate-200 border border-slate-700 transition-all font-semibold text-[11px] inline-flex items-center gap-1 active:scale-95"
+                        title={`Editar y modificar valor de ${p.key}`}
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Editar</span>
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+
+          {/* Modal: Editar y Modificar Propiedad (setprop) */}
+          {editingProp && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/40">
+                      <Edit3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Editar Propiedad del Sistema</h4>
+                      <p className="text-[11px] text-slate-400 font-mono">adb shell setprop</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingProp(null)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSaveEditedProperty} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Clave de la Propiedad (Key)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProp.key}
+                      onChange={(e) => setEditingProp({ ...editingProp, key: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Valor del Sistema (Value)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingProp.value}
+                      onChange={(e) => setEditingProp({ ...editingProp, value: e.target.value })}
+                      autoFocus
+                      className="w-full bg-slate-950 border border-cyan-500/80 rounded-xl px-3 py-2 text-cyan-300 font-mono text-xs font-bold focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    />
+                  </div>
+
+                  {/* Quick value suggestions chips */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[10px] text-slate-400">Valores comunes:</span>
+                    {['1', '0', 'adb,fastboot', 'mtp,adb', 'orange', 'green', 'true', 'false'].map((val) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => {
+                          playClickSound(soundEnabled);
+                          setEditingProp({ ...editingProp, value: val });
+                        }}
+                        className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-mono"
+                      >
+                        {val}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
+                      <select
+                        value={editingProp.category}
+                        onChange={(e) => setEditingProp({ ...editingProp, category: e.target.value as any })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500 capitalize"
+                      >
+                        <option value="build">Build</option>
+                        <option value="hardware">Hardware</option>
+                        <option value="security">Seguridad</option>
+                        <option value="network">Red</option>
+                        <option value="display">Pantalla</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Descripción</label>
+                      <input
+                        type="text"
+                        value={editingProp.description}
+                        onChange={(e) => setEditingProp({ ...editingProp, description: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setEditingProp(null)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Guardar y Aplicar (setprop)</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Añadir Nueva Propiedad (setprop) */}
+          {isAddPropModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+              <div className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/40">
+                      <Plus className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">Añadir Nueva Propiedad al Sistema</h4>
+                      <p className="text-[11px] text-slate-400 font-mono">setprop &lt;key&gt; &lt;value&gt;</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddPropModalOpen(false)}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleAddCustomProperty} className="space-y-3.5 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Clave de la Propiedad (ej: ro.custom.security, persist.sys.debug)
+                    </label>
+                    <input
+                      type="text"
+                      value={newPropKey}
+                      onChange={(e) => setNewPropKey(e.target.value)}
+                      placeholder="ro.custom.feature..."
+                      autoFocus
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Valor Asignado
+                    </label>
+                    <input
+                      type="text"
+                      value={newPropValue}
+                      onChange={(e) => setNewPropValue(e.target.value)}
+                      placeholder="1, true, adb..."
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-cyan-300 font-mono text-xs focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Categoría</label>
+                      <select
+                        value={newPropCategory}
+                        onChange={(e) => setNewPropCategory(e.target.value as any)}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-cyan-500 capitalize"
+                      >
+                        <option value="build">Build</option>
+                        <option value="hardware">Hardware</option>
+                        <option value="security">Seguridad</option>
+                        <option value="network">Red</option>
+                        <option value="display">Pantalla</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">Descripción</label>
+                      <input
+                        type="text"
+                        value={newPropDescription}
+                        onChange={(e) => setNewPropDescription(e.target.value)}
+                        placeholder="Propósito técnico..."
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-300 text-xs focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddPropModalOpen(false)}
+                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-teal-400 hover:from-cyan-400 hover:to-teal-300 text-slate-950 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Registrar Propiedad</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

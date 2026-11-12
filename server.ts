@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import path from 'path';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -284,6 +285,225 @@ app.get('/api/sync/status', (req, res) => {
     lastDevice: sessionInfo?.lastDevice || null,
     lastSeen: sessionInfo?.lastSeen || null,
   });
+});
+
+// ==========================================
+// Security API Policy & Cryptographic Audit Hub
+// ==========================================
+let activeSecurityPolicy = {
+  minPatternLength: 4,
+  minEntropyBits: 15,
+  maxAttemptsBeforeLockout: 5,
+  lockoutDurationSeconds: 30,
+  hashAlgorithm: 'HMAC-SHA-512' as 'HMAC-SHA-512' | 'PBKDF2-SHA-256' | 'SHA-256',
+  saltRounds: 100000,
+  enforceNonAdjacentNodes: false,
+  blockCommonShapes: true,
+  smudgeAttackDefense: true,
+  requireBiometricFallback: true,
+  updatedAt: Date.now(),
+};
+
+// GET /api/security/policy - Get current active security policies
+app.get('/api/security/policy', (_req, res) => {
+  return res.json({
+    success: true,
+    policy: activeSecurityPolicy,
+    supportedAlgorithms: ['HMAC-SHA-512', 'PBKDF2-SHA-256', 'SHA-256'],
+    standardsCompliance: ['Android Gatekeeper 15', 'NIST SP 800-63B', 'FIPS 140-3 Mode'],
+  });
+});
+
+// PUT /api/security/policy - Modify security API policy
+app.put('/api/security/policy', (req, res) => {
+  try {
+    const {
+      minPatternLength,
+      minEntropyBits,
+      maxAttemptsBeforeLockout,
+      lockoutDurationSeconds,
+      hashAlgorithm,
+      saltRounds,
+      enforceNonAdjacentNodes,
+      blockCommonShapes,
+      smudgeAttackDefense,
+      requireBiometricFallback,
+    } = req.body;
+
+    // Validation
+    if (minPatternLength !== undefined) {
+      const len = parseInt(minPatternLength, 10);
+      if (isNaN(len) || len < 3 || len > 16) {
+        return res.status(400).json({ success: false, error: 'minPatternLength debe estar entre 3 y 16' });
+      }
+      activeSecurityPolicy.minPatternLength = len;
+    }
+
+    if (minEntropyBits !== undefined) {
+      const ent = parseFloat(minEntropyBits);
+      if (isNaN(ent) || ent < 4 || ent > 64) {
+        return res.status(400).json({ success: false, error: 'minEntropyBits debe estar entre 4 y 64 bits' });
+      }
+      activeSecurityPolicy.minEntropyBits = ent;
+    }
+
+    if (maxAttemptsBeforeLockout !== undefined) {
+      const att = parseInt(maxAttemptsBeforeLockout, 10);
+      if (isNaN(att) || att < 1 || att > 20) {
+        return res.status(400).json({ success: false, error: 'maxAttemptsBeforeLockout debe estar entre 1 y 20' });
+      }
+      activeSecurityPolicy.maxAttemptsBeforeLockout = att;
+    }
+
+    if (lockoutDurationSeconds !== undefined) {
+      const dur = parseInt(lockoutDurationSeconds, 10);
+      if (isNaN(dur) || dur < 5 || dur > 3600) {
+        return res.status(400).json({ success: false, error: 'lockoutDurationSeconds debe estar entre 5 y 3600 segundos' });
+      }
+      activeSecurityPolicy.lockoutDurationSeconds = dur;
+    }
+
+    if (hashAlgorithm !== undefined) {
+      if (!['HMAC-SHA-512', 'PBKDF2-SHA-256', 'SHA-256'].includes(hashAlgorithm)) {
+        return res.status(400).json({ success: false, error: 'Algoritmo no válido. Utilice HMAC-SHA-512, PBKDF2-SHA-256 o SHA-256' });
+      }
+      activeSecurityPolicy.hashAlgorithm = hashAlgorithm;
+    }
+
+    if (saltRounds !== undefined) {
+      const rounds = parseInt(saltRounds, 10);
+      if (!isNaN(rounds) && rounds >= 1000 && rounds <= 500000) {
+        activeSecurityPolicy.saltRounds = rounds;
+      }
+    }
+
+    if (enforceNonAdjacentNodes !== undefined) {
+      activeSecurityPolicy.enforceNonAdjacentNodes = Boolean(enforceNonAdjacentNodes);
+    }
+    if (blockCommonShapes !== undefined) {
+      activeSecurityPolicy.blockCommonShapes = Boolean(blockCommonShapes);
+    }
+    if (smudgeAttackDefense !== undefined) {
+      activeSecurityPolicy.smudgeAttackDefense = Boolean(smudgeAttackDefense);
+    }
+    if (requireBiometricFallback !== undefined) {
+      activeSecurityPolicy.requireBiometricFallback = Boolean(requireBiometricFallback);
+    }
+
+    activeSecurityPolicy.updatedAt = Date.now();
+
+    return res.json({
+      success: true,
+      message: 'Parámetros de la API de seguridad actualizados con éxito.',
+      policy: activeSecurityPolicy,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Error al actualizar la política de seguridad' });
+  }
+});
+
+// POST /api/security/audit - Audit a pattern against the active security policy
+app.post('/api/security/audit', (req, res) => {
+  try {
+    const { pattern } = req.body;
+    if (!Array.isArray(pattern)) {
+      return res.status(400).json({ success: false, error: 'Se requiere una secuencia de patrón válida (array de números)' });
+    }
+
+    const violations: string[] = [];
+    const recommendations: string[] = [];
+
+    // Length check
+    if (pattern.length < activeSecurityPolicy.minPatternLength) {
+      violations.push(`Longitud insuficiente (${pattern.length} nodos). El mínimo de la política es ${activeSecurityPolicy.minPatternLength}.`);
+      recommendations.push(`Añade al menos ${activeSecurityPolicy.minPatternLength - pattern.length} nodo(s) adicional(es).`);
+    }
+
+    // Common shape detection
+    const patStr = pattern.join('-');
+    const commonPatterns: Record<string, string> = {
+      '0-1-2-5-8': 'Letra C',
+      '0-3-6-7-8': 'Letra L',
+      '0-1-2-4-6-7-8': 'Letra Z',
+      '0-3-6-4-2-5-8': 'Letra N',
+      '0-1-2-5-4-3-6-7-8': 'Letra S',
+      '0-1-2-3-4-5-6-7-8': 'Recorrido Lineal',
+    };
+
+    if (activeSecurityPolicy.blockCommonShapes && commonPatterns[patStr]) {
+      violations.push(`Forma común detectada: "${commonPatterns[patStr]}". Muy vulnerable a ataques de adivinación.`);
+      recommendations.push('Evita letras y formas geométricas predecibles.');
+    }
+
+    // Simple entropy calculation
+    const uniqueNodes = new Set(pattern).size;
+    const entropyBits = Math.round(pattern.length * Math.log2(Math.max(uniqueNodes, 1)) * 10) / 10;
+
+    if (entropyBits < activeSecurityPolicy.minEntropyBits) {
+      violations.push(`Entropía calculada (${entropyBits} bits) inferior al umbral de la política (${activeSecurityPolicy.minEntropyBits} bits).`);
+      recommendations.push('Combina cambios bruscos de dirección y saltos entre cuadrantes.');
+    }
+
+    const compliant = violations.length === 0;
+    const score = Math.max(10, Math.min(100, Math.round((pattern.length / 9) * 40 + (entropyBits / 25) * 40 + (compliant ? 20 : 0))));
+
+    return res.json({
+      success: true,
+      compliant,
+      score,
+      entropyBits,
+      policy: {
+        minPatternLength: activeSecurityPolicy.minPatternLength,
+        minEntropyBits: activeSecurityPolicy.minEntropyBits,
+        maxAttemptsBeforeLockout: activeSecurityPolicy.maxAttemptsBeforeLockout,
+        lockoutDurationSeconds: activeSecurityPolicy.lockoutDurationSeconds,
+        hashAlgorithm: activeSecurityPolicy.hashAlgorithm,
+      },
+      checks: {
+        lengthOk: pattern.length >= activeSecurityPolicy.minPatternLength,
+        entropyOk: entropyBits >= activeSecurityPolicy.minEntropyBits,
+        noCommonShape: !commonPatterns[patStr],
+      },
+      violations,
+      recommendations,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Error al auditar el patrón' });
+  }
+});
+
+// POST /api/security/verify - Cryptographically generate or verify pattern hash
+app.post('/api/security/verify', (req, res) => {
+  try {
+    const { pattern, salt } = req.body;
+    if (!Array.isArray(pattern) || pattern.length === 0) {
+      return res.status(400).json({ success: false, error: 'Se requiere una secuencia de patrón válida' });
+    }
+
+    const inputData = pattern.join(':');
+    const effectiveSalt = salt || 'GATEKEEPER_HMAC_SALT_v2';
+    let hashHex = '';
+
+    if (activeSecurityPolicy.hashAlgorithm === 'HMAC-SHA-512') {
+      hashHex = crypto.createHmac('sha512', effectiveSalt).update(inputData).digest('hex');
+    } else if (activeSecurityPolicy.hashAlgorithm === 'PBKDF2-SHA-256') {
+      hashHex = crypto.pbkdf2Sync(inputData, effectiveSalt, activeSecurityPolicy.saltRounds, 32, 'sha256').toString('hex');
+    } else {
+      hashHex = crypto.createHash('sha256').update(effectiveSalt + inputData).digest('hex');
+    }
+
+    return res.json({
+      success: true,
+      algorithm: activeSecurityPolicy.hashAlgorithm,
+      hash: `0x${hashHex.toUpperCase()}`,
+      salt: effectiveSalt,
+      iterations: activeSecurityPolicy.hashAlgorithm === 'PBKDF2-SHA-256' ? activeSecurityPolicy.saltRounds : 1,
+      fingerprint: hashHex.substring(0, 16),
+      timestamp: Date.now(),
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Error en la verificación criptográfica' });
+  }
 });
 
 // Vite middleware in dev or static files in production

@@ -11,6 +11,7 @@ export interface DeviceSystemProp {
   value: string;
   category: 'build' | 'hardware' | 'security' | 'network' | 'display';
   description?: string;
+  isModified?: boolean;
 }
 
 export interface DeviceStoragePartition {

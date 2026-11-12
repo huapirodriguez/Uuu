@@ -18,6 +18,8 @@ import {
   Check,
   Shapes,
   Circle,
+  Fingerprint,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -39,6 +41,9 @@ interface SettingsModalProps {
   onChangeCustomStyle: (style: CustomGridStyle) => void;
   onResetToDefaultPattern: () => void;
   theme: ThemeConfig;
+  isBiometricRequired?: boolean;
+  onToggleBiometricRequired?: (required: boolean) => void;
+  onTestBiometricChallenge?: () => void;
 }
 
 const CONNECTION_COLOR_PRESETS = [
@@ -78,6 +83,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onChangeCustomStyle,
   onResetToDefaultPattern,
   theme,
+  isBiometricRequired = true,
+  onToggleBiometricRequired,
+  onTestBiometricChallenge,
 }) => {
   const [modalTab, setModalTab] = useState<'visual' | 'system'>('visual');
   const [previewPattern, setPreviewPattern] = useState<number[]>([0, 1, 4, 7, 8]);
@@ -510,6 +518,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     onChange={(e) => onToggleShowNumbers(e.target.checked)}
                     className="w-4 h-4 accent-cyan-500 rounded cursor-pointer"
                   />
+                </div>
+
+                {/* Biometric Challenge Protection Toggle */}
+                <div className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <Fingerprint className="w-4 h-4 text-cyan-400" />
+                      <div>
+                        <div className="font-semibold text-white flex items-center gap-1.5">
+                          <span>Autenticación Biométrica Requerida</span>
+                          <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800 font-mono">
+                            MOCK BIOMETRIC
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Exigir huella dactilar o Face ID antes de abrir ajustes sensibles
+                        </div>
+                      </div>
+                    </div>
+                    {onToggleBiometricRequired && (
+                      <input
+                        type="checkbox"
+                        checked={isBiometricRequired}
+                        onChange={(e) => onToggleBiometricRequired(e.target.checked)}
+                        className="w-4 h-4 accent-cyan-500 rounded cursor-pointer"
+                      />
+                    )}
+                  </div>
+
+                  {onTestBiometricChallenge && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playClickSound(soundEnabled);
+                        onClose();
+                        onTestBiometricChallenge();
+                      }}
+                      className="w-full py-1.5 px-2.5 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-700/80 text-cyan-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                    >
+                      <Fingerprint className="w-3.5 h-3.5" />
+                      <span>Probar Desafío de Escaneo Huella / Face ID Ahora</span>
+                    </button>
+                  )}
                 </div>
               </div>
 

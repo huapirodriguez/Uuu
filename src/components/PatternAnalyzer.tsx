@@ -18,6 +18,7 @@ interface PatternAnalyzerProps {
   unlockAttempts?: UnlockAttempt[];
   onRecordAttempt?: (data: Omit<UnlockAttempt, 'id' | 'timestamp'>) => void;
   onClearAttempts?: () => void;
+  onOpenSecurityApi?: () => void;
 }
 
 export const PatternAnalyzer: React.FC<PatternAnalyzerProps> = ({
@@ -32,6 +33,7 @@ export const PatternAnalyzer: React.FC<PatternAnalyzerProps> = ({
   unlockAttempts = [],
   onRecordAttempt,
   onClearAttempts,
+  onOpenSecurityApi,
 }) => {
   // Tabs: 'charts' (Panel Recharts), 'audit' (Auditoría libre y presets), 'setup' (Configurar patrón)
   const [activeTab, setActiveTab] = useState<'charts' | 'audit' | 'setup'>('charts');
@@ -201,6 +203,20 @@ export const PatternAnalyzer: React.FC<PatternAnalyzerProps> = ({
             <Lock className="w-3.5 h-3.5" />
             <span>Configurar Clave</span>
           </button>
+
+          {onOpenSecurityApi && (
+            <button
+              onClick={() => {
+                playClickSound(soundEnabled);
+                onOpenSecurityApi();
+              }}
+              className="px-3.5 py-2 text-xs font-bold rounded-lg transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white shadow-sm active:scale-95 ml-auto"
+              title="Modificar parámetros y políticas de la API de seguridad"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Modificar API de Seguridad</span>
+            </button>
+          )}
         </div>
       </div>
 
